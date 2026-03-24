@@ -77,7 +77,12 @@ def fetch_lyrics_for_file(path: Path, overwrite: bool = False) -> str:
     if not lyrics:
         return "not found"
 
-    lrc_path.write_text(lyrics, encoding="utf-8")
+    try:
+        lrc_path.write_text(lyrics, encoding="utf-8")
+    except PermissionError:
+        return "error: permission denied"
+    except OSError as exc:
+        return f"error: {exc}"
     return "saved"
 
 
