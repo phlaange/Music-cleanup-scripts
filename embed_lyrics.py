@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""
+r"""
 embed_lyrics.py — Copy .lrc file contents into the lyrics tag of matching audio files.
 
 Supports MP3, M4A, and FLAC. Requires a .lrc file with the same base name as the

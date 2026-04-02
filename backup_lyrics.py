@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""
+r"""
 backup_lyrics.py — Save the lyrics tag of MP3, M4A, and FLAC files to a .bak text file.
 
 The .bak file is written alongside the audio file with the same base name.
