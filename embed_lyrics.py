@@ -5,22 +5,22 @@ embed_lyrics.py — Copy .lrc file contents into the lyrics tag of matching audi
 Supports MP3, M4A, and FLAC. Requires a .lrc file with the same base name as the
 audio file in the same directory.
 
-  ┌────────┬──────────────────────────────────────────────────┐
-  │ Format │                       Tag                        │
-  ├────────┼──────────────────────────────────────────────────┤
-  │ MP3    │ USLT (unsynchronized lyrics) or SYLT (synced)    │
-  ├────────┼──────────────────────────────────────────────────┤
-  │ M4A    │ ©lyr (iTunes lyrics field)                       │
-  ├────────┼──────────────────────────────────────────────────┤
-  │ FLAC   │ LYRICS (Vorbis comment)                          │
-  └────────┴──────────────────────────────────────────────────┘
+  ┌────────┬──────────────────────────────────────────────────────────────────┐
+  │ Format │ Tag                                                              │
+  ├────────┼──────────────────────────────────────────────────────────────────┤
+  │ MP3    │ SYLT if LRC has timestamps, USLT otherwise (--uslt forces USLT) │
+  ├────────┼──────────────────────────────────────────────────────────────────┤
+  │ M4A    │ ©lyr (iTunes lyrics field)                                       │
+  ├────────┼──────────────────────────────────────────────────────────────────┤
+  │ FLAC   │ LYRICS (Vorbis comment)                                          │
+  └────────┴──────────────────────────────────────────────────────────────────┘
 
 Usage:
   python embed_lyrics.py "K:\Music"
-  python embed_lyrics.py          # prompts for path
+  python embed_lyrics.py                        # prompts for path
   python embed_lyrics.py "K:\Music" --overwrite
   python embed_lyrics.py "K:\Music" --language fra
-  python embed_lyrics.py "K:\Music" --sylt        # MP3: write SYLT instead of USLT
+  python embed_lyrics.py "K:\Music" --uslt      # MP3: always write USLT, never SYLT
 
   Defaults to eng if --language is omitted.
 
@@ -40,6 +40,8 @@ try:
 except ImportError:
     sys.exit("Missing dependency: pip install mutagen")
 
+AUDIO_EXTENSIONS = (".mp3", ".m4a", ".flac")
+
 # Matches a timed LRC line: [mm:ss.xx] or [mm:ss.xxx]
 _LRC_LINE_RE = re.compile(r"^\[(\d{1,3}):(\d{2})\.(\d{2,3})\](.*)")
 
@@ -52,44 +54,40 @@ def parse_lrc(lyrics: str) -> list[tuple[str, int]]:
         if not m:
             continue
         minutes, seconds, frac, text = m.groups()
-        # frac may be 2 (centiseconds) or 3 (milliseconds) digits — normalise to ms
         ms = (int(minutes) * 60 + int(seconds)) * 1000 + int(frac.ljust(3, "0"))
         result.append((text.strip(), ms))
     return result
 
-AUDIO_EXTENSIONS = (".mp3", ".m4a", ".flac")
 
-
-def embed_mp3(path: Path, lyrics: str, overwrite: bool, lang: str, sylt: bool) -> str:
+def embed_mp3(path: Path, lyrics: str, overwrite: bool, lang: str, force_uslt: bool) -> str:
     try:
         try:
             tags = ID3(path)
         except ID3NoHeaderError:
             tags = ID3()
 
-        if sylt:
-            existing = tags.getall("SYLT")
-            if existing and not overwrite:
-                return "skipped (SYLT tag already set)"
-            synced = parse_lrc(lyrics)
-            if not synced:
-                return "skipped (no timed lines found in LRC for SYLT)"
+        synced = [] if force_uslt else parse_lrc(lyrics)
+
+        if synced:
+            if tags.getall("SYLT") and not overwrite:
+                return "skipped (SYLT already set)"
             tags.delall("SYLT")
             tags.add(SYLT(encoding=3, lang=lang, format=2, type=1, desc="", text=synced))
+            frame = "SYLT"
         else:
-            existing = tags.getall("USLT")
-            if existing and not overwrite:
-                return "skipped (lyrics tag already set)"
+            if tags.getall("USLT") and not overwrite:
+                return "skipped (USLT already set)"
             tags.delall("USLT")
             tags.add(USLT(encoding=3, lang=lang, desc="", text=lyrics))
+            frame = "USLT"
 
         tags.save(path)
-        return "saved"
+        return f"saved ({frame})"
     except Exception as exc:
         return f"error: {exc}"
 
 
-def embed_m4a(path: Path, lyrics: str, overwrite: bool, lang: str, sylt: bool) -> str:
+def embed_m4a(path: Path, lyrics: str, overwrite: bool, lang: str, force_uslt: bool) -> str:
     # M4A (iTunes) has no standard per-field language tag for lyrics; lang is not stored.
     try:
         tags = MP4(path)
@@ -102,7 +100,7 @@ def embed_m4a(path: Path, lyrics: str, overwrite: bool, lang: str, sylt: bool) -
         return f"error: {exc}"
 
 
-def embed_flac(path: Path, lyrics: str, overwrite: bool, lang: str, sylt: bool) -> str:
+def embed_flac(path: Path, lyrics: str, overwrite: bool, lang: str, force_uslt: bool) -> str:
     try:
         tags = FLAC(path)
         if tags.get("lyrics") and not overwrite:
@@ -122,7 +120,7 @@ EMBEDDERS = {
 }
 
 
-def embed_lyrics_for_file(path: Path, overwrite: bool, lang: str, sylt: bool) -> str:
+def embed_lyrics_for_file(path: Path, overwrite: bool, lang: str, force_uslt: bool) -> str:
     lrc_path = path.with_suffix(".lrc")
     if not lrc_path.exists():
         return "skipped (no .lrc file)"
@@ -135,10 +133,10 @@ def embed_lyrics_for_file(path: Path, overwrite: bool, lang: str, sylt: bool) ->
     if embedder is None:
         return "skipped (unsupported format)"
 
-    return embedder(path, lyrics, overwrite, lang, sylt)
+    return embedder(path, lyrics, overwrite, lang, force_uslt)
 
 
-def process_folder(root: Path, overwrite: bool = False, lang: str = "eng", sylt: bool = False) -> None:
+def process_folder(root: Path, overwrite: bool = False, lang: str = "eng", force_uslt: bool = False) -> None:
     audio_files = sorted(
         f for f in root.rglob("*") if f.suffix.lower() in AUDIO_EXTENSIONS
     )
@@ -150,7 +148,7 @@ def process_folder(root: Path, overwrite: bool = False, lang: str = "eng", sylt:
     width = len(str(len(audio_files)))
     for i, audio in enumerate(audio_files, 1):
         relative = audio.relative_to(root)
-        status = embed_lyrics_for_file(audio, overwrite=overwrite, lang=lang, sylt=sylt)
+        status = embed_lyrics_for_file(audio, overwrite=overwrite, lang=lang, force_uslt=force_uslt)
         print(f"[{i:{width}d}/{len(audio_files)}] {relative}  ->  {status}")
 
 
@@ -175,9 +173,9 @@ def main() -> None:
         help="ISO 639-2 three-letter language code (default: eng).",
     )
     parser.add_argument(
-        "--sylt",
+        "--uslt",
         action="store_true",
-        help="MP3 only: write a SYLT (synced lyrics) frame instead of USLT.",
+        help="MP3 only: always write USLT (plain text), never SYLT, even for timed LRC files.",
     )
     args = parser.parse_args()
 
@@ -196,7 +194,7 @@ def main() -> None:
 
     lang = args.language.lower()
     print(f"Scanning: {root.resolve()}\n")
-    process_folder(root, overwrite=args.overwrite, lang=lang, sylt=args.sylt)
+    process_folder(root, overwrite=args.overwrite, lang=lang, force_uslt=args.uslt)
     print("\nDone.")
 
 
