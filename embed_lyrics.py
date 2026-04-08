@@ -28,7 +28,6 @@ Requires:
     pip install mutagen
 """
 
-import re
 import sys
 import argparse
 from pathlib import Path
@@ -40,23 +39,9 @@ try:
 except ImportError:
     sys.exit("Missing dependency: pip install mutagen")
 
+from lrc_utils import parse_lrc, has_timestamps
+
 AUDIO_EXTENSIONS = (".mp3", ".m4a", ".flac")
-
-# Matches a timed LRC line: [mm:ss.xx] or [mm:ss.xxx]
-_LRC_LINE_RE = re.compile(r"^\[(\d{1,3}):(\d{2})\.(\d{2,3})\](.*)")
-
-
-def parse_lrc(lyrics: str) -> list[tuple[str, int]]:
-    """Parse LRC text into a list of (line_text, timestamp_ms) tuples for SYLT."""
-    result = []
-    for line in lyrics.splitlines():
-        m = _LRC_LINE_RE.match(line.strip())
-        if not m:
-            continue
-        minutes, seconds, frac, text = m.groups()
-        ms = (int(minutes) * 60 + int(seconds)) * 1000 + int(frac.ljust(3, "0"))
-        result.append((text.strip(), ms))
-    return result
 
 
 def embed_mp3(path: Path, lyrics: str, overwrite: bool, lang: str, force_uslt: bool) -> str:
@@ -66,7 +51,8 @@ def embed_mp3(path: Path, lyrics: str, overwrite: bool, lang: str, force_uslt: b
         except ID3NoHeaderError:
             tags = ID3()
 
-        synced = [] if force_uslt else parse_lrc(lyrics)
+        # parse_lrc returns (lyric, cs); SYLT needs milliseconds so multiply cs by 10
+        synced = [] if force_uslt else [(t, cs * 10) for t, cs in parse_lrc(lyrics)]
 
         if synced:
             if tags.getall("SYLT") and not overwrite:

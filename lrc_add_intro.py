@@ -16,17 +16,12 @@ Requires: no third-party dependencies
 """
 
 import sys
-import re
 import argparse
 from pathlib import Path
 
-_TIMESTAMP_RE = re.compile(r"^\[(\d{1,3}):(\d{2})\.(\d{2,3})\]")
-_DEFAULT_INTRO = "** intro **"
+from lrc_utils import TIMED_RE, parse_cs
 
-
-def timestamp_to_ms(m: re.Match) -> int:
-    minutes, seconds, frac = m.groups()
-    return (int(minutes) * 60 + int(seconds)) * 1000 + int(frac.ljust(3, "0"))
+_DEFAULT_INTRO = "---** INTRO **---"
 
 
 def process_lrc(path: Path, intro_text: str, overwrite: bool) -> str:
@@ -40,14 +35,14 @@ def process_lrc(path: Path, intro_text: str, overwrite: bool) -> str:
     lines = content.splitlines(keepends=True)
 
     # Collect all timed lines
-    timed = [(i, _TIMESTAMP_RE.match(l.strip())) for i, l in enumerate(lines)]
+    timed = [(i, TIMED_RE.match(l.strip())) for i, l in enumerate(lines)]
     timed = [(i, m) for i, m in timed if m]
 
     if not timed:
         return "skipped (no timestamps)"
 
     # Check whether any line is already at time zero
-    zero_indices = [i for i, m in timed if timestamp_to_ms(m) == 0]
+    zero_indices = [i for i, m in timed if parse_cs(m) == 0]
 
     if zero_indices and not overwrite:
         return "skipped ([00:00.00] already present)"
@@ -55,10 +50,8 @@ def process_lrc(path: Path, intro_text: str, overwrite: bool) -> str:
     intro_line = f"[00:00.00] {intro_text}\n"
 
     if zero_indices and overwrite:
-        # Replace the text of existing zero-time line(s), keep only the first
-        first = zero_indices[0]
-        lines[first] = _TIMESTAMP_RE.sub(f"[00:00.00] {intro_text}", lines[first].rstrip(), count=1) + "\n"
-        # Remove any additional zero-time lines
+        # Replace existing zero-time line(s) with the intro, keep only the first
+        lines[zero_indices[0]] = intro_line
         for i in reversed(zero_indices[1:]):
             lines.pop(i)
     else:

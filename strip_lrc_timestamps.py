@@ -15,7 +15,6 @@ Requires:
     pip install mutagen
 """
 
-import re
 import sys
 import argparse
 from pathlib import Path
@@ -27,34 +26,9 @@ try:
 except ImportError:
     sys.exit("Missing dependency: pip install mutagen")
 
+from lrc_utils import has_timestamps, strip_timestamps
+
 AUDIO_EXTENSIONS = (".mp3", ".m4a", ".flac")
-
-# Timed LRC line: [mm:ss.xx] or [mm:ss.xxx]
-_TIMED_RE = re.compile(r"^\[(\d{1,3}):(\d{2})\.(\d{2,3})\](.*)")
-# LRC metadata tag: [ar:...], [ti:...], [al:...], [by:...], [offset:...], etc.
-_META_RE = re.compile(r"^\[[a-zA-Z]+:[^\]]*\]$")
-
-
-def has_timestamps(text: str) -> bool:
-    return any(_TIMED_RE.match(line.strip()) for line in text.splitlines())
-
-
-def strip_timestamps(text: str) -> str:
-    """Remove LRC timing and metadata lines; keep the lyric text only."""
-    result = []
-    for line in text.splitlines():
-        stripped = line.strip()
-        m = _TIMED_RE.match(stripped)
-        if m:
-            lyric = m.group(4).strip()
-            result.append(lyric)
-        elif _META_RE.match(stripped):
-            pass  # drop LRC metadata tags entirely
-        else:
-            result.append(line.rstrip())
-    # Collapse runs of more than one blank line
-    cleaned = re.sub(r"\n{3,}", "\n\n", "\n".join(result))
-    return cleaned.strip()
 
 
 def process_mp3(path: Path, overwrite: bool) -> str:
