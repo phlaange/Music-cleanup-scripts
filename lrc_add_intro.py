@@ -21,7 +21,7 @@ from pathlib import Path
 
 from lrc_utils import TIMED_RE, parse_cs
 
-_DEFAULT_INTRO = "---** INTRO **---"
+_DEFAULT_INTRO = "--- ɪɴᴛʀᴏ ---"
 
 
 def process_lrc(path: Path, intro_text: str, overwrite: bool) -> str:
