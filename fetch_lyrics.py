@@ -1,13 +1,19 @@
 #!/usr/bin/env python3
-"""
+r"""
 fetch_lyrics.py — Download synced lyrics (.lrc) for MP3, M4A, and FLAC files in a folder hierarchy.
+
+Skips files that already have a .lrc sidecar. Use --overwrite to replace them.
+
+Usage:
+  python fetch_lyrics.py "K:\Music"
+  python fetch_lyrics.py                        # prompts for path
+  python fetch_lyrics.py "K:\Music" --overwrite
 
 Requires:
     pip install syncedlyrics mutagen
 """
 
 import sys
-import os
 import argparse
 from pathlib import Path
 
