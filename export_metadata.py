@@ -10,7 +10,7 @@ Usage:
   python export_metadata.py                          # prompts for path
   python export_metadata.py "K:\Music" --output metadata.csv
 
-If --output is omitted the CSV is written to metadata.csv in the current directory.
+If --output is omitted the CSV is written to metadata.csv inside the scanned folder.
 
 Requires:
     pip install mutagen
@@ -95,9 +95,9 @@ def main() -> None:
     )
     parser.add_argument(
         "--output",
-        default="metadata.csv",
+        default=None,
         metavar="FILE",
-        help="Output CSV file (default: metadata.csv).",
+        help="Output CSV file (default: metadata.csv inside the scanned folder).",
     )
     args = parser.parse_args()
 
@@ -111,8 +111,9 @@ def main() -> None:
     if not root.is_dir():
         sys.exit(f"Not a directory: {root}")
 
+    output = Path(args.output) if args.output else root / "metadata.csv"
     print(f"Scanning: {root.resolve()}\n")
-    process_folder(root, Path(args.output))
+    process_folder(root, output)
 
 
 if __name__ == "__main__":
