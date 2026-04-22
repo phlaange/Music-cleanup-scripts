@@ -2,3 +2,5 @@
 .vscode/
 *.md
 *.lrc
+**/*.pyc
+/__pycache__/
